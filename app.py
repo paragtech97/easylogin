@@ -1,32 +1,32 @@
-from flask import Flask, redirect, url_for, session
-from flask_oauthlib.client import OAuth
+from flask import Flask, redirect, url_for, session, request
+from authlib.integrations.flask_client import OAuth
 from dotenv import load_dotenv
 import os
 
 # Load environment variables from the .env file
-load_dotenv()
+load_dotenv(r'D:\Panoroma\Projects\EasyLogin.env')  # Use raw string for Windows path
 
 app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY')  # Load SECRET_KEY from .env
 
-# Secret key for session management (from .env)
-app.secret_key = os.getenv('SECRET_KEY')
+# Validate environment variables
+if not app.secret_key:
+    raise ValueError("SECRET_KEY is not set in the .env file.")
+if not os.getenv('GOOGLE_CLIENT_ID') or not os.getenv('GOOGLE_CLIENT_SECRET'):
+    raise ValueError("Google OAuth credentials are missing in the .env file.")
 
-# Initialize OAuth object
+# Initialize OAuth
 oauth = OAuth(app)
 
 # Register Google OAuth with credentials from .env
-google = oauth.remote_app(
-    'google',
-    consumer_key=os.getenv('GOOGLE_CLIENT_ID'),  # Client ID from .env
-    consumer_secret=os.getenv('GOOGLE_CLIENT_SECRET'),  # Client Secret from .env
-    request_token_params={
-        'scope': 'email',
-    },
-    base_url='https://www.googleapis.com/oauth2/v1/',
-    request_token_url=None,
-    access_token_method='POST',
+google = oauth.register(
+    name='google',
+    client_id=os.getenv('GOOGLE_CLIENT_ID'),
+    client_secret=os.getenv('GOOGLE_CLIENT_SECRET'),
     access_token_url='https://accounts.google.com/o/oauth2/token',
     authorize_url='https://accounts.google.com/o/oauth2/auth',
+    api_base_url='https://www.googleapis.com/oauth2/v1/',
+    client_kwargs={'scope': 'email profile'},
 )
 
 @app.route('/')
@@ -35,31 +35,22 @@ def index():
 
 @app.route('/login')
 def login():
-    return google.authorize(callback=url_for('authorized', _external=True))
+    redirect_uri = url_for('authorized', _external=True)
+    return google.authorize_redirect(redirect_uri)
 
 @app.route('/auth')
 def authorized():
-    response = google.authorized_response()
-    if response is None or response.get('access_token') is None:
-        return 'Access denied: reason={} error={}'.format(
-            request.args.get('error', 'No reason provided'),
-            request.args.get('error_description', 'No description provided')
-        )
-    
-    session['google_token'] = (response['access_token'], '')
-    user_info = google.get('userinfo')
-    session['user'] = user_info.data
-    return f"Logged in as: {user_info.data['email']}"
+    token = google.authorize_access_token()
+    if token is None:
+        error_message = request.args.get('error', 'Unknown error')
+        return f"Authorization failed: {error_message}"
+    session['user'] = google.get('userinfo').json()
+    return f"Logged in as: {session['user']['email']}"
 
 @app.route('/logout')
 def logout():
-    session.pop('user', None)  # Remove user from the session
-    return redirect(url_for('index'))  # Redirect to the homepage
-
-# To handle Google token for session
-@google.tokengetter
-def get_google_oauth_token():
-    return session.get('google_token')
+    session.pop('user', None)
+    return redirect(url_for('index'))
 
 if __name__ == '__main__':
     app.run(debug=True)
