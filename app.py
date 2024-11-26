@@ -1,24 +1,23 @@
 from flask import Flask, redirect, url_for, session, request
 from authlib.integrations.flask_client import OAuth
-from dotenv import load_dotenv
 import os
 
-# Load environment variables from the .env file
-load_dotenv(r'D:\Panoroma\Projects\EasyLogin.env')  # Use raw string for Windows path
-
+# Initialize Flask app
 app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY')  # Load SECRET_KEY from .env
 
-# Validate environment variables
+# Load the secret key and Google OAuth credentials from environment variables
+app.secret_key = os.getenv('SECRET_KEY')  # SECRET_KEY should be set in Render's environment variables
+
+# Validate environment variables (make sure they are set correctly in Render's environment)
 if not app.secret_key:
-    raise ValueError("SECRET_KEY is not set in the .env file.")
+    raise ValueError("SECRET_KEY is not set in the environment variables.")
 if not os.getenv('GOOGLE_CLIENT_ID') or not os.getenv('GOOGLE_CLIENT_SECRET'):
-    raise ValueError("Google OAuth credentials are missing in the .env file.")
+    raise ValueError("Google OAuth credentials are missing in the environment variables.")
 
 # Initialize OAuth
 oauth = OAuth(app)
 
-# Register Google OAuth with credentials from .env
+# Register Google OAuth with credentials from environment variables
 google = oauth.register(
     name='google',
     client_id=os.getenv('GOOGLE_CLIENT_ID'),
@@ -35,6 +34,7 @@ def index():
 
 @app.route('/login')
 def login():
+    # Make sure the redirect URI matches the one you registered in Google Developer Console
     redirect_uri = url_for('authorized', _external=True)
     return google.authorize_redirect(redirect_uri)
 
@@ -53,4 +53,5 @@ def logout():
     return redirect(url_for('index'))
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=8080)
+    # Render will automatically handle starting the app; no need for app.run()
+    pass
