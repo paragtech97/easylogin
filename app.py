@@ -53,5 +53,5 @@ def logout():
     return redirect(url_for('index'))
 
 if __name__ == '__main__':
-    # Render will automatically handle starting the app; no need for app.run()
-    pass
+    # Render automatically binds to the correct port
+    app.run(debug=True, host='0.0.0.0', port=int(os.getenv('PORT', 8080)))
